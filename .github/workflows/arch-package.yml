@@ -1,0 +1,73 @@
+name: Build Arch package and release
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: arch-package-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Install build and runtime dependencies
+        # act uses the container's Node.js for JavaScript actions.
+        run: |
+          pacman -Syu --noconfirm --needed git nodejs cmake ninja go qt6-base qt6-declarative qt6-shadertools layer-shell-qt pipewire pipewire-audio kwin desktop-file-utils
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Build and test as an unprivileged user
+        env:
+          PROJECT_URL: ${{ github.server_url }}/${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          useradd --create-home builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          package_version="${RELEASE_TAG:-0.1.0}"
+          package_version="${package_version#v}"
+          package_version="${package_version//-/_}"
+          runuser -u builder -- env PROJECT_URL="$PROJECT_URL" PACKAGE_VERSION="$package_version" bash scripts/build-arch-package.sh --noconfirm
+      - name: Inspect package metadata and contents
+        run: |
+          pacman -Qip bin/packages/*.pkg.tar.zst
+          pacman -Qlp bin/packages/*.pkg.tar.zst
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: kde-synth-arch-x86_64
+          path: |
+            bin/packages/*.pkg.tar.zst
+            bin/packages/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Publish tagged release
+    needs: package
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download the tested Arch package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: kde-synth-arch-x86_64
+          path: release-assets
+      - name: Verify package checksums
+        working-directory: release-assets
+        run: sha256sum -c SHA256SUMS
+      - name: Create release for the pushed tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" release-assets/*.pkg.tar.zst release-assets/SHA256SUMS \
+            --verify-tag --title "$RELEASE_TAG" --generate-notes

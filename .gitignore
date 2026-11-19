@@ -1,0 +1,28 @@
+# Generated builds, packages and local validation data
+/build/
+/bin/
+/work/
+/dist/
+/outputs/
+*.pkg.tar.*
+*.log
+
+# Credentials and machine-local settings
+.env
+.env.*
+!.env.example
+.secrets
+.secrets.*
+*.pem
+*.key
+
+# Editor and assistant state
+.idea/
+.vscode/
+.codex/
+.agents/
+AGENTS.md
+*.swp
+*.swo
+*~
+.DS_Store

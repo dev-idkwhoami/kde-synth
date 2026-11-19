@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=KDE Synthesizer
+GenericName=Desktop Music Visualizer
+Comment=Bring your Plasma wallpaper to life with music
+Exec=kde-synth --settings
+Icon=kde-synth
+Terminal=false
+Categories=AudioVideo;Audio;
+Keywords=music;visualizer;spectrum;waveform;PipeWire;
+StartupNotify=false
